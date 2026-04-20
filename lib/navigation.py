@@ -137,6 +137,12 @@ def open_current_order() -> object | None:
     return wait_detail_window(timeout=6.0)
 
 
+def fire_open_next() -> None:
+    """Press F10 without waiting — use when the next window can load in the background."""
+    pyautogui.press("f10")
+    time.sleep(0.1)
+
+
 def next_row(pause: float = 0.3) -> None:
     """Move list selection to the next order (auto-scrolls in the Dispatch list)."""
     pyautogui.press("down")

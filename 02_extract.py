@@ -22,9 +22,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import argparse
 import json
-import sys
 import time
 import traceback
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
@@ -32,6 +32,8 @@ from lib import navigation as nav
 from lib.checkpoint import append_order_row, load_processed, mark_processed
 from lib.schema import normalize_row
 from lib.vision import VisionExtractor
+
+MIN_NAV_WAIT = 4.0  # minimum seconds to let next window load while Claude runs
 
 ROOT = Path(__file__).parent
 CONFIG_PATH = ROOT / "config.json"
@@ -103,32 +105,27 @@ def capture_all_tabs(cfg: dict, order_dir: Path) -> tuple[dict[str, Path], list[
     return shots, poor_quality
 
 
-def process_one(cfg: dict, extractor: VisionExtractor | None) -> tuple[str | None, str]:
-    """Process the currently-selected order. Returns (code, status)."""
-    detail = nav.open_current_order()
-    if detail is None:
-        return None, "no_detail_window"
-
-    code = nav.extract_code_from_title(detail) or "UNKNOWN"
-    log(f"  order opened: {code}")
-
-    order_dir = SCREENSHOTS_DIR / code
-    shots, poor_quality = capture_all_tabs(cfg, order_dir)
-
+def _write_row(
+    code: str,
+    order_dir: Path,
+    poor_quality: list[str],
+    extractor: VisionExtractor | None,
+    data: dict | None,
+    raw: str | None,
+) -> str:
+    """Build and append the CSV row for one order. Returns the status string."""
     status = "ok"
     if poor_quality:
         status = "partial_quality"
-    row = normalize_row({"code_ordre": code})
 
+    row = normalize_row({"code_ordre": code})
     if extractor is not None:
-        data, raw = extractor.extract(shots)
         if data is None:
             status = "vision_failed"
             (order_dir / "vision_raw.txt").write_text(raw or "", encoding="utf-8")
             log(f"  vision extraction failed for {code}")
         else:
             row = normalize_row(data)
-            # safety: make sure code_ordre is set even if vision missed it
             if not row.get("code_ordre"):
                 row["code_ordre"] = code
             (order_dir / "vision_raw.json").write_text(
@@ -142,13 +139,7 @@ def process_one(cfg: dict, extractor: VisionExtractor | None) -> tuple[str | Non
     row["extracted_at"] = datetime.now().isoformat(timespec="seconds")
 
     append_order_row(ORDERS_CSV, row)
-
-    closed = nav.close_detail(cfg.get("close_button"))
-    if not closed:
-        log_error(f"  could not close detail for {code}")
-        status = status + "+close_stuck"
-
-    return code, status
+    return status
 
 
 def main() -> None:
@@ -184,35 +175,77 @@ def main() -> None:
     log("Starts in 5 seconds — focus Dispatch INNOVIA now.")
     time.sleep(5)
 
-    count = 0
-    while True:
-        try:
-            code, status = process_one(cfg, extractor)
-        except Exception:
-            tb = traceback.format_exc()
-            log_error(f"unexpected exception: {tb}")
-            # attempt to recover
-            nav.close_detail(cfg.get("close_button"))
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        # Open the first order before entering the loop.
+        detail = nav.open_current_order()
+        if detail is None:
+            log_error("Could not open first order; aborting.")
+            return
+
+        count = 0
+        while True:
+            # ── CAPTURE: screenshots of the currently-open detail window ──────────
+            try:
+                code = nav.extract_code_from_title(detail) or "UNKNOWN"
+                log(f"  order opened: {code}")
+                order_dir = SCREENSHOTS_DIR / code
+                shots, poor_quality = capture_all_tabs(cfg, order_dir)
+            except Exception:
+                tb = traceback.format_exc()
+                log_error(f"capture exception: {tb}")
+                nav.close_detail(cfg.get("close_button"))
+                nav.next_row()
+                detail = nav.open_current_order()
+                if detail is None:
+                    log_error("recovery failed; aborting.")
+                    break
+                continue
+
+            # ── NAVIGATE: close current detail, advance list, fire F10 ────────────
+            closed = nav.close_detail(cfg.get("close_button"))
+            if not closed:
+                log_error(f"close stuck for {code}; continuing anyway")
+
             nav.next_row()
-            continue
+            nav_t0 = time.time()
+            nav.fire_open_next()  # F10 without waiting — next window loads in background
 
-        if code is None:
-            log_error("no detail window opened; aborting")
-            break
+            # ── CLAUDE: extract in background while next window loads ─────────────
+            future: Future | None = None
+            if extractor is not None:
+                future = executor.submit(extractor.extract, shots)
 
-        mark_processed(PROCESSED_CSV, code, status)
-        processed[code] = status
-        count += 1
-        log(f"  #{count} done: {code} [{status}]")
+            # ── SYNC: wait for Claude AND at least MIN_NAV_WAIT total ────────────
+            data: dict | None = None
+            raw: str | None = None
+            if future is not None:
+                data, raw = future.result()  # blocks until Claude done
 
-        if code == args.stop_code:
-            log(f"Reached stop code {code}. Stopping.")
-            break
-        if args.dry_run and count >= args.dry_run:
-            log(f"Reached dry-run limit ({args.dry_run}). Stopping.")
-            break
+            elapsed = time.time() - nav_t0
+            remaining = MIN_NAV_WAIT - elapsed
+            if remaining > 0:
+                time.sleep(remaining)
 
-        nav.next_row()
+            # ── WRITE: CSV row for the order just captured ────────────────────────
+            status = _write_row(code, order_dir, poor_quality, extractor, data, raw)
+            mark_processed(PROCESSED_CSV, code, status)
+            processed[code] = status
+            count += 1
+            log(f"  #{count} done: {code} [{status}]")
+
+            # ── STOP: check conditions ────────────────────────────────────────────
+            if code == args.stop_code:
+                log(f"Reached stop code {code}. Stopping.")
+                break
+            if args.dry_run and count >= args.dry_run:
+                log(f"Reached dry-run limit ({args.dry_run}). Stopping.")
+                break
+
+            # ── NEXT: the detail window was already fired; wait for it ────────────
+            detail = nav.wait_detail_window(timeout=max(3.0, MIN_NAV_WAIT))
+            if detail is None:
+                log_error("Next detail window did not appear; aborting.")
+                break
 
     log(f"=== Finished. Total processed this run: {count} ===")
 
