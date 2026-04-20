@@ -16,7 +16,7 @@ def load_processed(path: Path) -> dict[str, str]:
     if not path.exists():
         return {}
     out: dict[str, str] = {}
-    with open(path, "r", encoding="utf-8", newline="") as f:
+    with open(path, "r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
             code = (row.get("code") or "").strip()
@@ -29,7 +29,7 @@ def mark_processed(path: Path, code: str, status: str) -> None:
     """Append one line to processed.csv (creates file with header if missing)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     new_file = not path.exists()
-    with open(path, "a", encoding="utf-8", newline="") as f:
+    with open(path, "a", encoding="utf-8-sig", newline="") as f:
         writer = csv.writer(f)
         if new_file:
             writer.writerow(PROCESSED_HEADER)
@@ -40,7 +40,7 @@ def append_order_row(path: Path, row: dict[str, str]) -> None:
     """Append one extracted order to orders.csv (creates file with header if missing)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     new_file = not path.exists()
-    with open(path, "a", encoding="utf-8", newline="") as f:
+    with open(path, "a", encoding="utf-8-sig", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
         if new_file:
             writer.writeheader()
