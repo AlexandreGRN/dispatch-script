@@ -93,12 +93,11 @@ def main() -> None:
     log(f"Found: {main_win.window_text()}")
     log(f"Rect: {main_win.rectangle()}")
 
-    try:
-        main_win.set_focus()
-    except Exception as e:
-        log(f"  warning: could not set focus: {e}")
+    log("Tu as 5 secondes pour cliquer sur la liste 'Ordres réguliers' (une ligne bleue selectionnee)...")
+    for i in range(5, 0, -1):
+        log(f"  {i}...")
+        time.sleep(1)
 
-    time.sleep(0.5)
     screenshot("01_list_initial")
 
     # 2. Dump tree of main window (to find the list grid control)
