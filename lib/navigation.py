@@ -77,6 +77,35 @@ def screenshot(path: Path) -> Path:
     return path
 
 
+def _screenshot_quality(path: Path) -> float:
+    """Return std dev of pixel values — low value = mostly uniform = likely bad render."""
+    from PIL import Image, ImageStat
+    import statistics
+    img = Image.open(path).convert("L")
+    stat = ImageStat.Stat(img)
+    return stat.stddev[0]
+
+
+def screenshot_with_retry(
+    path: Path,
+    click_xy: tuple[int, int] | list[int] | None = None,
+    min_quality: float = 8.0,
+    max_attempts: int = 2,
+    retry_pause: float = 1.5,
+) -> tuple[Path, bool]:
+    """Take a screenshot, retry if quality is too low. Returns (path, is_ok)."""
+    for attempt in range(max_attempts):
+        if attempt > 0 and click_xy is not None:
+            click_at(click_xy, pause=retry_pause)
+        elif attempt > 0:
+            time.sleep(retry_pause)
+        screenshot(path)
+        quality = _screenshot_quality(path)
+        if quality >= min_quality:
+            return path, True
+    return path, False
+
+
 def close_detail(close_button_xy: tuple[int, int] | list[int] | None = None) -> bool:
     """Close the detail window.
 

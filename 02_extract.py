@@ -56,41 +56,51 @@ def log_error(msg: str) -> None:
         f.write(f"{datetime.now().isoformat(timespec='seconds')}\t{msg}\n")
 
 
-def capture_all_tabs(cfg: dict, order_dir: Path) -> dict[str, Path]:
-    """Click through every tab & sub-tab, take a screenshot for each view."""
+def capture_all_tabs(cfg: dict, order_dir: Path) -> tuple[dict[str, Path], list[str]]:
+    """Click through every tab & sub-tab, take a screenshot for each view.
+    Returns (shots dict, list of tab names with poor quality screenshots).
+    """
     order_dir.mkdir(parents=True, exist_ok=True)
     shots: dict[str, Path] = {}
+    poor_quality: list[str] = []
+
+    def snap(name: str, path: Path, click_xy=None) -> None:
+        p, ok = nav.screenshot_with_retry(path, click_xy=click_xy)
+        shots[name] = p
+        if not ok:
+            poor_quality.append(name)
+            log(f"  ⚠ poor quality screenshot: {name} (flagged)")
 
     # Général
-    nav.click_at(cfg["tabs"]["general"], pause=0.7)
-    shots["general"] = nav.screenshot(order_dir / "01_general.png")
+    nav.click_at(cfg["tabs"]["general"], pause=1.0)
+    snap("general", order_dir / "01_general.png", click_xy=cfg["tabs"]["general"])
 
     # Ordre → Enlèvement
-    nav.click_at(cfg["tabs"]["ordre"], pause=0.7)
-    nav.click_at(cfg["sub_tabs"]["enlevement"], pause=0.4)
-    shots["ordre_enl"] = nav.screenshot(order_dir / "02_ordre_enlevement.png")
+    nav.click_at(cfg["tabs"]["ordre"], pause=1.0)
+    nav.click_at(cfg["sub_tabs"]["enlevement"], pause=0.8)
+    snap("ordre_enl", order_dir / "02_ordre_enlevement.png", click_xy=cfg["sub_tabs"]["enlevement"])
 
-    # Ordre → Contact côté Enlèvement
-    nav.click_at(cfg["sub_tabs"]["enlevement_contact"], pause=0.4)
-    shots["ordre_enl_contact"] = nav.screenshot(order_dir / "03_ordre_enl_contact.png")
+    # Ordre → Contact Enlèvement
+    nav.click_at(cfg["sub_tabs"]["enlevement_contact"], pause=0.8)
+    snap("ordre_enl_contact", order_dir / "03_ordre_enl_contact.png", click_xy=cfg["sub_tabs"]["enlevement_contact"])
 
     # Ordre → Livraison
-    nav.click_at(cfg["sub_tabs"]["livraison"], pause=0.4)
-    shots["ordre_liv"] = nav.screenshot(order_dir / "04_ordre_livraison.png")
+    nav.click_at(cfg["sub_tabs"]["livraison"], pause=0.8)
+    snap("ordre_liv", order_dir / "04_ordre_livraison.png", click_xy=cfg["sub_tabs"]["livraison"])
 
-    # Ordre → Contact côté Livraison
-    nav.click_at(cfg["sub_tabs"]["livraison_contact"], pause=0.4)
-    shots["ordre_liv_contact"] = nav.screenshot(order_dir / "05_ordre_liv_contact.png")
+    # Ordre → Contact Livraison
+    nav.click_at(cfg["sub_tabs"]["livraison_contact"], pause=0.8)
+    snap("ordre_liv_contact", order_dir / "05_ordre_liv_contact.png", click_xy=cfg["sub_tabs"]["livraison_contact"])
 
     # Attribution
-    nav.click_at(cfg["tabs"]["attribution"], pause=0.7)
-    shots["attribution"] = nav.screenshot(order_dir / "06_attribution.png")
+    nav.click_at(cfg["tabs"]["attribution"], pause=1.0)
+    snap("attribution", order_dir / "06_attribution.png", click_xy=cfg["tabs"]["attribution"])
 
     # Tarification
-    nav.click_at(cfg["tabs"]["tarification"], pause=0.7)
-    shots["tarification"] = nav.screenshot(order_dir / "07_tarification.png")
+    nav.click_at(cfg["tabs"]["tarification"], pause=1.0)
+    snap("tarification", order_dir / "07_tarification.png", click_xy=cfg["tabs"]["tarification"])
 
-    return shots
+    return shots, poor_quality
 
 
 def process_one(cfg: dict, extractor: VisionExtractor | None) -> tuple[str | None, str]:
@@ -103,9 +113,11 @@ def process_one(cfg: dict, extractor: VisionExtractor | None) -> tuple[str | Non
     log(f"  order opened: {code}")
 
     order_dir = SCREENSHOTS_DIR / code
-    shots = capture_all_tabs(cfg, order_dir)
+    shots, poor_quality = capture_all_tabs(cfg, order_dir)
 
     status = "ok"
+    if poor_quality:
+        status = "partial_quality"
     row = normalize_row({"code_ordre": code})
 
     if extractor is not None:
@@ -124,6 +136,8 @@ def process_one(cfg: dict, extractor: VisionExtractor | None) -> tuple[str | Non
             )
 
     row["status"] = status
+    if poor_quality:
+        row["champs_manquants"] = "poor_screenshot:" + ",".join(poor_quality)
     row["screenshots_dir"] = str(order_dir.relative_to(ROOT))
     row["extracted_at"] = datetime.now().isoformat(timespec="seconds")
 
