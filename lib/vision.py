@@ -24,6 +24,8 @@ Ta mission : extraire STRICTEMENT les champs demandés depuis ce que tu VOIS dan
 - Les heures : format "HH:MM" tel qu'affiché.
 - Les montants : nombre décimal avec point (ex: 395.00).
 - Les jours de la semaine : liste séparée par des virgules avec abréviations courtes (lun,mar,mer,jeu,ven,sam,dim).
+  ATTENTION RENDU DISPATCH : le logiciel affiche parfois les jours avec des espaces parasites entre chaque lettre (bug graphique). Exemple : "ma r d i"="mardi", "me r c r ed i"="mercredi", "l u n d i"="lundi", "j eu d i"="jeudi", "v en d r ed i"="vendredi". Reconstitue le mot complet lettre par lettre.
+  VALIDATION OBLIGATOIRE via le calendrier Gantt : l'onglet Général contient un calendrier visuel (cases vertes/bleues par semaine). Utilise-le pour CONFIRMER les jours extraits du texte. Si le Gantt montre des coches sur mardi-vendredi mais le texte dit "lundi-vendredi", signale la discordance avec le champ supplémentaire "jours_semaine_uncertain": true. Si concordance → "jours_semaine_uncertain": false.
 - Pour les sous-prestations (sp1..sp4) : ordre d'apparition dans le tableau de l'onglet Tarification. Si moins de 4 sous-prestations, laisse les slots restants null.
 - Réponds UNIQUEMENT avec un JSON valide, sans markdown, sans commentaire, sans texte avant/après."""
 

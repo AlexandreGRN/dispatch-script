@@ -7,7 +7,7 @@ CSV_COLUMNS: list[str] = [
     "code_client", "nom_client",
     "donneur_ordre", "reference_1", "reference_2", "reference_3", "nb_pp",
     "periodicite", "date_debut", "date_fin", "frequence_intervalle",
-    "jours_semaine", "jours_feries",
+    "jours_semaine", "jours_semaine_uncertain", "jours_feries",
     "enl_nom", "enl_no", "enl_rue", "enl_complement", "enl_cp", "enl_ville", "enl_pays",
     "enl_horaire_type", "enl_horaire", "enl_horaire_2",
     "enl_contact_nom", "enl_contact_tel", "enl_contact_email",
