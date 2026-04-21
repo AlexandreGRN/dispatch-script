@@ -90,8 +90,8 @@ def screenshot_with_retry(
     path: Path,
     click_xy: tuple[int, int] | list[int] | None = None,
     min_quality: float = 8.0,
-    max_attempts: int = 2,
-    retry_pause: float = 1.5,
+    max_attempts: int = 3,
+    retry_pause: float = 2.5,
 ) -> tuple[Path, bool]:
     """Take a screenshot, retry if quality is too low. Returns (path, is_ok)."""
     for attempt in range(max_attempts):

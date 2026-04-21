@@ -31,15 +31,36 @@ Ta mission : extraire STRICTEMENT les champs demandés depuis ce que tu VOIS dan
 
 - Pour les sous-prestations (sp1..sp4) : ordre d'apparition dans le tableau de l'onglet Tarification. Si moins de 4 sous-prestations, laisse les slots restants null.
 
-- CHAMP "additional_info" : si tu vois dans les screenshots des informations potentiellement importantes qui ne rentrent dans aucun autre champ (commentaire spécifique, note manuscrite, champ libre rempli, particularité visuelle, numéro ou référence inhabituelle, mention d'un conditionnement spécial, etc.), résume-les brièvement en français dans ce champ (max 2-3 phrases). Si rien de notable, renvoie null. Ne duplique JAMAIS ici une donnée déjà présente dans un autre champ.
+- CHAMP "additional_info" (POUBELLE DE LUXE — TRÈS UTILISÉ) : toute information potentiellement utile qui ne rentre dans AUCUN autre champ JSON dédié doit atterrir ici. Exemples à capturer systématiquement :
+  • Commentaires libres, notes manuscrites, champs "Instructions" / "Commentaire" / "Informations" remplis
+  • Numéros/références inhabituels (code porte, bon de commande, dossier client, n° BL, n° tour)
+  • Consignes spécifiques (sonner à l'interphone, prévenir 30 min avant, livraison contre signature, refus partiel autorisé, etc.)
+  • Conditionnement particulier, sensibilité de la marchandise, contrainte d'accès quai/nacelle
+  • Plages horaires alternatives ou exceptions ("sauf lundi", "pas le 1er du mois", "férié = livré la veille")
+  • Tout ce que tu vois écrit à l'écran et qui n'a pas de colonne dédiée
+  Format : texte libre français, jusqu'à ~500 caractères. Plusieurs infos = sépare par " | ". Si vraiment rien de notable → null. Ne duplique JAMAIS ici une donnée déjà présente dans un autre champ.
 
-- CHAMP "claude_comment" (TRÈS IMPORTANT — AUTO-ÉVALUATION) : utilise ce champ pour DIRE comment s'est passée l'extraction de ton point de vue. Liste :
-  • ce qui était clair et extrait avec certitude (concision),
-  • ce qui était ambigu / partiellement visible / nécessitait une devinette (DÉTAILLE, c'est crucial),
-  • les champs que tu as mis à null alors qu'ils existaient probablement mais illisibles,
-  • les incohérences détectées (ex: Gantt ≠ texte, date_fin vide pour une récurrence active, periodicite Mensuelle mais pas de days_of_month visibles, montants non cohérents, etc.),
-  • tout ce qui mérite une vérification humaine.
-  Écris en français, format libre, max 5 phrases courtes ou 5 bullet points. NE RENVOIE JAMAIS null pour ce champ si tu as extrait au moins une valeur — il doit contenir au minimum une phrase. Si tout est propre et sans doute : "Extraction nette, tous les champs visibles sont extraits avec certitude." Ce champ n'est JAMAIS dupliqué dans un autre.
+- BON SENS sur la planification (IMPORTANT) : le bloc Planification peut contenir PLUSIEURS sous-blocs (Hebdomadaire/Mensuelle). Applique ton bon sens :
+  • Si les sous-blocs sont STRICTEMENT identiques (mêmes dates, même périodicité, mêmes jours) → c'est une duplication buggée de Dispatch : n'en garde qu'UN pour remplir les champs, et note-le dans claude_comment.
+  • Si les sous-blocs se COMBINENT (ex: bloc A = lundi, bloc B = mercredi) → fusionne les jours dans jours_semaine (ex: "lun,mer").
+  • Si les sous-blocs ont des dates de début différentes → prends la PLUS ANCIENNE pour date_debut et la plus tardive pour date_fin, et note-le dans claude_comment.
+  • Si les sous-blocs ont des périodicités MIXTES (Hebdo + Mensuelle) → remplis selon la première et note le conflit dans claude_comment (ce cas demandera une vérif humaine).
+  • Vérifie TOUJOURS le calendrier Gantt pour confirmer quels jours sont réellement actifs — c'est la source de vérité en cas de conflit avec le texte.
+
+- CHAMP "claude_comment" (JOURNAL D'EXTRACTION STRUCTURÉ — OBLIGATOIRE) : rapport sur la qualité de ton extraction. Format STRICT avec tags entre crochets, séparés par " | " :
+  [ILLISIBLE] liste des champs dont tu vois qu'un cadre/label existe mais dont la valeur est illisible (texte flou, coupé, bug de rendu Dispatch type "pas redessiné", zone grisée) → NE DEVINE PAS, mets null dans le JSON et liste ici.
+  [DEVINÉ] champs pour lesquels tu as fait une best guess pas 100% sûre (texte partiellement visible, Gantt ambigu, reconstruction des lettres espacées de Dispatch).
+  [ATTENTION] incohérences détectées (Gantt ≠ texte, date_fin vide pour récurrence active, Mensuelle sans days_of_month visibles, plusieurs blocs Planification, montants absurdes, contact vide, etc.).
+  [OK] phrase courte sur ce qui est clair et fiable.
+  Exemples :
+    "[ILLISIBLE] enl_contact_tel, liv_horaire | [DEVINÉ] jours_semaine (Gantt peu lisible mais texte cohérent) | [OK] reste"
+    "[ATTENTION] 2 blocs Planification Hebdo identiques → duplication Dispatch, un seul gardé | [OK] tout le reste"
+    "[OK] extraction nette, aucun doute"
+  RÈGLES :
+  - Ne renvoie JAMAIS null si tu as extrait au moins une valeur
+  - Les tags [ILLISIBLE] et [ATTENTION] sont des signaux de relance → sois exhaustif, ne rate rien
+  - Si un champ visuel est totalement vide dans l'UI (pas de cadre/label), n'en parle pas (c'est normal)
+  - Ce champ n'est JAMAIS dupliqué dans additional_info
 
 - Réponds UNIQUEMENT avec un JSON valide, sans markdown, sans commentaire, sans texte avant/après."""
 

@@ -44,7 +44,7 @@ from lib.checkpoint import (
 from lib.schema import normalize_row
 from lib.vision import VisionExtractor
 
-MIN_NAV_WAIT = 4.0  # minimum seconds to let next window load while Claude runs
+MIN_NAV_WAIT = 8.0  # minimum seconds to let next window load while Claude runs
 
 ROOT = Path(__file__).parent
 CONFIG_PATH = ROOT / "config.json"
