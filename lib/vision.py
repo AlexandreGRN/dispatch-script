@@ -34,6 +34,8 @@ Ta mission : extraire STRICTEMENT les champs demandés depuis ce que tu VOIS dan
   • Case "Au" décochée □ → date_fin = null (récurrence sans fin)
   Vérifie TOUJOURS l'état de la case avant d'extraire date_fin. Un champ grisé/désactivé = décoché.
 
+- SCREENSHOT "general_days" (9e screenshot, optionnel) : capture de l'onglet Général AVEC la dropdown "Le ..." (jours de semaine) dépliée. Affiche la liste complète lundi/mardi/.../dimanche avec checkboxes cochées ✓. Utilise-le en PRIORITÉ pour remplir jours_semaine quand il est présent — il lève toute ambiguïté dans les cas où le texte inline sur l'onglet Général principal est illisible/partiellement rendu. Si présent et que son contenu diffère du texte inline, c'est la dropdown qui fait foi (jours_semaine_uncertain=false dans ce cas).
+
 - ONGLET "Informations" : un onglet dédié (séparé de Général/Ordre/Attribution/Tarification) contient :
   • "Saisi le" : date de saisie de l'ordre dans Dispatch (pour info, pas toujours utile)
   • "Commentaires" avec 3 champs : "Infos Enl." (infos enlèvement), "Infos Liv." (infos livraison), "Info Fact." (info facturation)

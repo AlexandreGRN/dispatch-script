@@ -128,6 +128,16 @@ def capture_all_tabs(cfg: dict, order_dir: Path) -> tuple[dict[str, Path], list[
     nav.click_at(cfg["tabs"]["general"], pause=1.5)
     snap("general", order_dir / "08_general.png", click_xy=cfg["tabs"]["general"], sweep=True)
 
+    # Général — dropdown "Le ..." (jours de semaine) déplié, pour lever
+    # l'ambiguïté quand le texte inline est illisible. Dropdown reste ouvert :
+    # close_detail() (Escape+Enter) qui suit ferme tout d'un coup.
+    days_xy = cfg.get("tabs", {}).get("general_days_dropdown")
+    if days_xy:
+        nav.click_at(days_xy, pause=0.6)
+        snap("general_days", order_dir / "09_general_days.png")
+    else:
+        log("  ⚠ tabs.general_days_dropdown not calibrated — skipping days dropdown")
+
     return shots, poor_quality
 
 

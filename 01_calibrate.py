@@ -26,6 +26,7 @@ TARGETS = [
     ("tabs.informations",          "Onglet 'Informations'"),
     ("tabs.attribution",           "Onglet 'Attribution'"),
     ("tabs.tarification",          "Onglet 'Tarification'"),
+    ("tabs.general_days_dropdown", "Flèche ▼ dropdown 'Le ...' (jours de semaine, panneau Planification droite)"),
     ("sub_tabs.enlevement",        "Sous-onglet 'Enlèvement' (panneau gauche de l'onglet Ordre)"),
     ("sub_tabs.enlevement_contact","Sous-onglet 'Contact' côté Enlèvement"),
     ("sub_tabs.livraison",         "Sous-onglet 'Livraison' (panneau droit)"),
