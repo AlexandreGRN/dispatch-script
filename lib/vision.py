@@ -26,7 +26,13 @@ Ta mission : extraire STRICTEMENT les champs demandés depuis ce que tu VOIS dan
 - Les jours de la semaine : liste séparée par des virgules avec abréviations courtes (lun,mar,mer,jeu,ven,sam,dim).
   ATTENTION RENDU DISPATCH : le logiciel affiche parfois les jours avec des espaces parasites entre chaque lettre (bug graphique). Exemple : "ma r d i"="mardi", "me r c r ed i"="mercredi", "l u n d i"="lundi", "j eu d i"="jeudi", "v en d r ed i"="vendredi". Reconstitue le mot complet lettre par lettre.
   VALIDATION OBLIGATOIRE via le calendrier Gantt : l'onglet Général contient un calendrier visuel (cases vertes/bleues par semaine). Utilise-le pour CONFIRMER les jours extraits du texte. Si le Gantt montre des coches sur mardi-vendredi mais le texte dit "lundi-vendredi", signale la discordance avec le champ supplémentaire "jours_semaine_uncertain": true. Si concordance → "jours_semaine_uncertain": false.
+
+- RÈGLE SPÉCIFIQUE PERIODICITE="Mensuelle" : le champ "jours_semaine" n'est PAS pertinent → renvoie-le à null ET "jours_semaine_uncertain": false. À la place, remplis "days_of_month" = liste d'entiers entre 1 et 31 (JSON array: [1], [1, 15], [5, 20], etc.) correspondant aux jours du mois actifs. Le Gantt Mensuel est organisé en lignes = mois et colonnes = jours 1→31 : les cases avec coche verte ✓ indiquent les jours actifs. Si un seul jour (ex: le 1er de chaque mois), renvoie [1]. Pour les periodicites non-Mensuelles, renvoie "days_of_month": null.
+
 - Pour les sous-prestations (sp1..sp4) : ordre d'apparition dans le tableau de l'onglet Tarification. Si moins de 4 sous-prestations, laisse les slots restants null.
+
+- CHAMP "additional_info" : si tu vois dans les screenshots des informations potentiellement importantes qui ne rentrent dans aucun autre champ (commentaire spécifique, note manuscrite, champ libre rempli, particularité visuelle, numéro ou référence inhabituelle, mention d'un conditionnement spécial, etc.), résume-les brièvement en français dans ce champ (max 2-3 phrases). Si rien de notable, renvoie null. Ne duplique JAMAIS ici une donnée déjà présente dans un autre champ.
+
 - Réponds UNIQUEMENT avec un JSON valide, sans markdown, sans commentaire, sans texte avant/après."""
 
 
@@ -52,6 +58,8 @@ def _build_schema_prompt() -> str:
         "- sp1..sp4 : onglet Tarification, tableau sous-prestations.\n"
         "- conducteur_*, vehicule_*, remorque : onglet Attribution.\n"
         "- montant_total : onglet Tarification, 'Montant' ou 'Vente'.\n"
+        "- days_of_month : UNIQUEMENT pour periodicite='Mensuelle', liste d'entiers 1-31 extraits du Gantt mensuel (null sinon).\n"
+        "- additional_info : info importante vue dans les screenshots qui ne rentre dans aucun autre champ (null si rien).\n"
     )
 
 

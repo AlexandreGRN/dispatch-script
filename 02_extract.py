@@ -3,10 +3,14 @@ Main extraction loop: iterate through every order in the list, capture 8 screens
 send them to Claude Vision, append structured data to output/orders.csv.
 
 Usage:
-    python 02_extract.py                  # full run until VIA33MON
-    python 02_extract.py --dry-run 3      # stop after 3 orders (for testing)
-    python 02_extract.py --stop-code XXX  # stop after processing this code
-    python 02_extract.py --no-vision      # skip API calls (archive screenshots only)
+    python 02_extract.py                           # full run until VIA33MON
+    python 02_extract.py --dry-run 3               # stop after 3 orders (for testing)
+    python 02_extract.py --stop-code XXX           # stop after processing this code
+    python 02_extract.py --no-vision               # skip API calls (archive screenshots only)
+    python 02_extract.py --codes 2BOL458,CEN11TOU  # process only these codes
+    python 02_extract.py --codes-file path.txt     # process only codes listed (comma-or-newline-separated)
+    python 02_extract.py --codes-file to_review.txt --overwrite
+                                                   # re-extract listed codes, replacing existing data
 
 Prereqs:
     - Dispatch INNOVIA open, "Liste des ordres réguliers" focused, 1st row selected (blue).
@@ -22,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import argparse
 import json
+import shutil
 import time
 import traceback
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -29,7 +34,13 @@ from datetime import datetime
 from pathlib import Path
 
 from lib import navigation as nav
-from lib.checkpoint import append_order_row, load_processed, mark_processed
+from lib.checkpoint import (
+    append_order_row,
+    load_processed,
+    mark_processed,
+    migrate_csv_header,
+    remove_codes,
+)
 from lib.schema import normalize_row
 from lib.vision import VisionExtractor
 
@@ -142,6 +153,40 @@ def _write_row(
     return status
 
 
+def _load_target_codes(args) -> set[str] | None:
+    """Parse --codes and --codes-file into a set of uppercase codes, or None if not set."""
+    codes: set[str] = set()
+    if args.codes:
+        codes.update(c.strip().upper() for c in args.codes.split(",") if c.strip())
+    if args.codes_file:
+        p = Path(args.codes_file)
+        if not p.exists():
+            log(f"ERROR: --codes-file {p} not found")
+            sys.exit(1)
+        text = p.read_text(encoding="utf-8")
+        # Accept either commas or newlines as separators.
+        for tok in text.replace("\n", ",").split(","):
+            tok = tok.strip().upper()
+            if tok:
+                codes.add(tok)
+    return codes or None
+
+
+def _purge_codes(codes: set[str]) -> None:
+    """Delete screenshot dirs + remove rows from orders.csv and processed.csv for these codes."""
+    migrate_csv_header(ORDERS_CSV)
+    removed_orders = remove_codes(ORDERS_CSV, codes, code_col="code_ordre")
+    removed_proc = remove_codes(PROCESSED_CSV, codes, code_col="code")
+    deleted_dirs = 0
+    for code in codes:
+        d = SCREENSHOTS_DIR / code
+        if d.exists():
+            shutil.rmtree(d)
+            deleted_dirs += 1
+    log(f"Purged {removed_orders} row(s) from orders.csv, "
+        f"{removed_proc} from processed.csv, {deleted_dirs} screenshot dir(s).")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", type=int, default=0, help="process only N orders then stop")
@@ -149,6 +194,14 @@ def main() -> None:
                         help=f"stop after processing this code (default: {DEFAULT_STOP_CODE})")
     parser.add_argument("--no-vision", action="store_true",
                         help="skip Claude API calls (archive screenshots only)")
+    parser.add_argument("--codes", type=str, default=None,
+                        help="comma-separated list of codes to process (skip all others)")
+    parser.add_argument("--codes-file", type=str, default=None,
+                        help="path to a file containing codes (comma- or newline-separated)")
+    parser.add_argument("--overwrite", action="store_true",
+                        help="when used with --codes/--codes-file: delete existing screenshots + "
+                             "remove rows from orders.csv + processed.csv for the listed codes "
+                             "before processing")
     args = parser.parse_args()
 
     if not CONFIG_PATH.exists():
@@ -157,6 +210,18 @@ def main() -> None:
 
     cfg = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     OUTPUT_DIR.mkdir(exist_ok=True)
+
+    # Migrate orders.csv header if CSV_COLUMNS has drifted (e.g. new columns added).
+    if migrate_csv_header(ORDERS_CSV):
+        log(f"Migrated {ORDERS_CSV.name} header to current schema.")
+
+    target_codes = _load_target_codes(args)
+    if args.overwrite and not target_codes:
+        log("ERROR: --overwrite requires --codes or --codes-file.")
+        sys.exit(1)
+    if args.overwrite and target_codes:
+        log(f"--overwrite: purging {len(target_codes)} code(s) from existing outputs…")
+        _purge_codes(target_codes)
 
     extractor: VisionExtractor | None = None
     if not args.no_vision:
@@ -169,6 +234,8 @@ def main() -> None:
     processed = load_processed(PROCESSED_CSV)
     log(f"Resuming with {len(processed)} orders already processed.")
     log(f"Stop code: {args.stop_code}")
+    if target_codes:
+        log(f"Target filter: {len(target_codes)} code(s) to process (all others skipped).")
     if args.dry_run:
         log(f"DRY RUN: limited to {args.dry_run} orders.")
 
@@ -183,7 +250,21 @@ def main() -> None:
             return
 
         count = 0
+        target_hits = 0
         while True:
+            # ── FILTER: if --codes is set and this order isn't in the list, skip fast ─
+            if target_codes is not None:
+                current_code = (nav.extract_code_from_title(detail) or "UNKNOWN").upper()
+                if current_code not in target_codes:
+                    nav.close_detail(cfg.get("close_button"))
+                    nav.next_row()
+                    nav.fire_open_next()
+                    detail = nav.wait_detail_window(timeout=max(3.0, MIN_NAV_WAIT))
+                    if detail is None:
+                        log_error("Next detail window did not appear after skip; aborting.")
+                        break
+                    continue
+
             # ── CAPTURE: screenshots of the currently-open detail window ──────────
             try:
                 code = nav.extract_code_from_title(detail) or "UNKNOWN"
@@ -231,7 +312,10 @@ def main() -> None:
             mark_processed(PROCESSED_CSV, code, status)
             processed[code] = status
             count += 1
-            log(f"  #{count} done: {code} [{status}]")
+            if target_codes is not None and code.upper() in target_codes:
+                target_hits += 1
+            log(f"  #{count} done: {code} [{status}]"
+                + (f" (target {target_hits}/{len(target_codes)})" if target_codes else ""))
 
             # ── STOP: check conditions ────────────────────────────────────────────
             if code == args.stop_code:
@@ -239,6 +323,9 @@ def main() -> None:
                 break
             if args.dry_run and count >= args.dry_run:
                 log(f"Reached dry-run limit ({args.dry_run}). Stopping.")
+                break
+            if target_codes is not None and target_hits >= len(target_codes):
+                log(f"All {len(target_codes)} target code(s) processed. Stopping.")
                 break
 
             # ── NEXT: the detail window was already fired; wait for it ────────────

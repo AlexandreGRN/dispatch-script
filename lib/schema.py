@@ -23,6 +23,7 @@ CSV_COLUMNS: list[str] = [
     "conducteur_code", "conducteur_nom",
     "vehicule_code", "vehicule_libelle", "remorque",
     "montant_total",
+    "days_of_month", "additional_info",
     "status", "champs_manquants", "screenshots_dir", "extracted_at",
 ]
 
@@ -42,5 +43,10 @@ def normalize_row(data: dict) -> dict[str, str]:
     row = empty_row()
     for k, v in (data or {}).items():
         if k in row:
-            row[k] = "" if v is None else str(v)
+            if v is None:
+                row[k] = ""
+            elif isinstance(v, list):
+                row[k] = ",".join(str(x) for x in v)
+            else:
+                row[k] = str(v)
     return row
