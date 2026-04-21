@@ -252,19 +252,40 @@ def main() -> None:
         count = 0
         skipped = 0
         while True:
-            # ── FILTER: if target_codes is set, skip non-matching orders fast ─────
+            # ── FILTER: if target_codes is set, skip non-matching orders ──────────
             code = nav.extract_code_from_title(detail) or "UNKNOWN"
             if target_codes is not None and code not in target_codes:
                 skipped += 1
                 if skipped % 20 == 0:
                     log(f"  … skipped {skipped} non-target orders so far (last: {code})")
-                nav.close_detail(cfg.get("close_button"))
-                nav.next_row()
+                closed = nav.close_detail(cfg.get("close_button"))
+                if not closed:
+                    log_error(f"close stuck on non-target {code}; retrying once")
+                    time.sleep(1.0)
+                    closed = nav.close_detail(cfg.get("close_button"))
+                    if not closed:
+                        log_error("close still stuck; aborting cleanly.")
+                        break
+                # Let the list re-focus before moving selection
+                time.sleep(0.6)
+                nav.next_row(pause=0.5)
+                nav_t0 = time.time()
                 nav.fire_open_next()
                 if code == args.stop_code:
                     log(f"Reached stop code {code} while skipping. Stopping.")
                     break
-                detail = nav.wait_detail_window(timeout=max(3.0, MIN_NAV_WAIT))
+                # Replicate main-path timing: ensure at least MIN_NAV_WAIT elapses
+                # between F10 and wait_detail_window (in the main path, Claude fills that gap).
+                elapsed = time.time() - nav_t0
+                remaining = MIN_NAV_WAIT - elapsed
+                if remaining > 0:
+                    time.sleep(remaining)
+                detail = nav.wait_detail_window(timeout=8.0)
+                if detail is None:
+                    # One retry with a fresh F10 — Dispatch sometimes drops the first keystroke
+                    log(f"  detail window missing after skip of {code}; retrying F10 once")
+                    nav.fire_open_next()
+                    detail = nav.wait_detail_window(timeout=6.0)
                 if detail is None:
                     log_error("Next detail window did not appear after skip; aborting.")
                     break
