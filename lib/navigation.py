@@ -66,6 +66,32 @@ def click_at(xy: tuple[int, int] | list[int], pause: float = 0.4) -> None:
     time.sleep(pause)
 
 
+def force_redraw_hover(xy: tuple[int, int] | list[int]) -> None:
+    """Move the cursor over a target before interacting with it.
+
+    Workaround for Dispatch INNOVIA under RDP: the app only repaints its
+    controls when the mouse hovers over them. Without this, pyautogui clicks
+    a stale area and screenshots capture un-rendered widgets.
+
+    Performs a small L-shape motion around the target so that Dispatch's
+    hover events fire reliably (a single moveTo is sometimes optimized-out
+    by the RDP client).
+    """
+    x, y = int(xy[0]), int(xy[1])
+    pyautogui.moveTo(x - 30, y - 30, duration=0.15)
+    pyautogui.moveTo(x + 10, y + 10, duration=0.15)
+    pyautogui.moveTo(x, y, duration=0.10)
+    time.sleep(0.3)  # let Dispatch process the hover and repaint
+
+
+def hover_click(xy: tuple[int, int] | list[int], pause: float = 0.6) -> None:
+    """Force redraw by hovering, then click. Use everywhere we need a freshly
+    rendered view (tab switches, etc.)."""
+    force_redraw_hover(xy)
+    pyautogui.click(int(xy[0]), int(xy[1]))
+    time.sleep(pause)
+
+
 def press(key: str, pause: float = 0.2) -> None:
     pyautogui.press(key)
     time.sleep(pause)
@@ -86,6 +112,27 @@ def _screenshot_quality(path: Path) -> float:
     return stat.stddev[0]
 
 
+def _sweep_content_area() -> None:
+    """Drag the cursor across the entire detail window to force Dispatch to
+    repaint every control before the screenshot. Works around RDP rendering
+    lag where widgets stay blank until hovered.
+
+    Boustrophédon sweep covering the full Dispatch detail window (roughly
+    1456x800 on a 1440p display). Grid of 6 rows x 5 columns = 30 points.
+    Each row alternates direction so the cursor sweeps continuously without
+    flying back across the screen, maximizing hover events per pixel.
+
+    Runs in ~1.2s total — tradeoff for reliable rendering under RDP.
+    """
+    xs = [100, 450, 800, 1150, 1400]
+    ys = [80, 200, 320, 450, 600, 750]
+    for i, y in enumerate(ys):
+        row = xs if i % 2 == 0 else list(reversed(xs))
+        for x in row:
+            pyautogui.moveTo(x, y, duration=0.04)
+    time.sleep(0.5)
+
+
 def screenshot_with_retry(
     path: Path,
     click_xy: tuple[int, int] | list[int] | None = None,
@@ -93,12 +140,17 @@ def screenshot_with_retry(
     max_attempts: int = 3,
     retry_pause: float = 2.5,
 ) -> tuple[Path, bool]:
-    """Take a screenshot, retry if quality is too low. Returns (path, is_ok)."""
+    """Take a screenshot, retry if quality is too low. Returns (path, is_ok).
+
+    Before each attempt we sweep the cursor across the detail content area to
+    force Dispatch to repaint under RDP (see _sweep_content_area).
+    """
     for attempt in range(max_attempts):
         if attempt > 0 and click_xy is not None:
             click_at(click_xy, pause=retry_pause)
         elif attempt > 0:
             time.sleep(retry_pause)
+        _sweep_content_area()
         screenshot(path)
         quality = _screenshot_quality(path)
         if quality >= min_quality:
