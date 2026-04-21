@@ -82,49 +82,51 @@ def capture_all_tabs(cfg: dict, order_dir: Path) -> tuple[dict[str, Path], list[
     shots: dict[str, Path] = {}
     poor_quality: list[str] = []
 
-    def snap(name: str, path: Path, click_xy=None) -> None:
-        p, ok = nav.screenshot_with_retry(path, click_xy=click_xy)
+    def snap(name: str, path: Path, click_xy=None, sweep: bool = False) -> None:
+        # Sweep only on tabs that historically render badly (Gantt on Général).
+        # Simple form tabs repaint fine with just the click hover.
+        p, ok = nav.screenshot_with_retry(path, click_xy=click_xy, sweep=sweep)
         shots[name] = p
         if not ok:
             poor_quality.append(name)
             log(f"  ⚠ poor quality screenshot: {name} (flagged)")
 
     # Ordre → Enlèvement
-    nav.click_at(cfg["tabs"]["ordre"], pause=1.0)
-    nav.click_at(cfg["sub_tabs"]["enlevement"], pause=0.8)
+    nav.click_at(cfg["tabs"]["ordre"], pause=0.5)
+    nav.click_at(cfg["sub_tabs"]["enlevement"], pause=0.4)
     snap("ordre_enl", order_dir / "01_ordre_enlevement.png", click_xy=cfg["sub_tabs"]["enlevement"])
 
     # Ordre → Contact Enlèvement
-    nav.click_at(cfg["sub_tabs"]["enlevement_contact"], pause=0.8)
+    nav.click_at(cfg["sub_tabs"]["enlevement_contact"], pause=0.4)
     snap("ordre_enl_contact", order_dir / "02_ordre_enl_contact.png", click_xy=cfg["sub_tabs"]["enlevement_contact"])
 
     # Ordre → Livraison
-    nav.click_at(cfg["sub_tabs"]["livraison"], pause=0.8)
+    nav.click_at(cfg["sub_tabs"]["livraison"], pause=0.4)
     snap("ordre_liv", order_dir / "03_ordre_livraison.png", click_xy=cfg["sub_tabs"]["livraison"])
 
     # Ordre → Contact Livraison
-    nav.click_at(cfg["sub_tabs"]["livraison_contact"], pause=0.8)
+    nav.click_at(cfg["sub_tabs"]["livraison_contact"], pause=0.4)
     snap("ordre_liv_contact", order_dir / "04_ordre_liv_contact.png", click_xy=cfg["sub_tabs"]["livraison_contact"])
 
     # Informations (commentaires + saisie) — skipped if not calibrated yet
     info_xy = cfg.get("tabs", {}).get("informations")
     if info_xy:
-        nav.click_at(info_xy, pause=1.0)
+        nav.click_at(info_xy, pause=0.5)
         snap("informations", order_dir / "05_informations.png", click_xy=info_xy)
     else:
         log("  ⚠ tabs.informations not calibrated — skipping Informations tab")
 
     # Attribution
-    nav.click_at(cfg["tabs"]["attribution"], pause=1.0)
+    nav.click_at(cfg["tabs"]["attribution"], pause=0.5)
     snap("attribution", order_dir / "06_attribution.png", click_xy=cfg["tabs"]["attribution"])
 
     # Tarification
-    nav.click_at(cfg["tabs"]["tarification"], pause=1.0)
+    nav.click_at(cfg["tabs"]["tarification"], pause=0.5)
     snap("tarification", order_dir / "07_tarification.png", click_xy=cfg["tabs"]["tarification"])
 
-    # Général — LAST, so it has the most time to render the Gantt
+    # Général — LAST, sweep enabled (Gantt is the slow-painting widget).
     nav.click_at(cfg["tabs"]["general"], pause=1.5)
-    snap("general", order_dir / "08_general.png", click_xy=cfg["tabs"]["general"])
+    snap("general", order_dir / "08_general.png", click_xy=cfg["tabs"]["general"], sweep=True)
 
     return shots, poor_quality
 

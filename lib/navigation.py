@@ -152,6 +152,7 @@ def screenshot_with_retry(
     min_quality: float = 8.0,
     max_attempts: int = 3,
     retry_pause: float = 2.5,
+    sweep: bool = True,
 ) -> tuple[Path, bool]:
     """Take a screenshot, retry if quality is too low. Returns (path, is_ok).
 
@@ -163,7 +164,8 @@ def screenshot_with_retry(
             click_at(click_xy, pause=retry_pause)
         elif attempt > 0:
             time.sleep(retry_pause)
-        _sweep_content_area()
+        if sweep:
+            _sweep_content_area()
         screenshot(path)
         quality = _screenshot_quality(path)
         if quality >= min_quality:
