@@ -29,6 +29,16 @@ Ta mission : extraire STRICTEMENT les champs demandés depuis ce que tu VOIS dan
 
 - RÈGLE SPÉCIFIQUE PERIODICITE="Mensuelle" : le champ "jours_semaine" n'est PAS pertinent → renvoie-le à null ET "jours_semaine_uncertain": false. À la place, remplis "days_of_month" = liste d'entiers entre 1 et 31 (JSON array: [1], [1, 15], [5, 20], etc.) correspondant aux jours du mois actifs. Le Gantt Mensuel est organisé en lignes = mois et colonnes = jours 1→31 : les cases avec coche verte ✓ indiquent les jours actifs. Si un seul jour (ex: le 1er de chaque mois), renvoie [1]. Pour les periodicites non-Mensuelles, renvoie "days_of_month": null.
 
+- RÈGLE CRITIQUE "date_fin" (case "Au" du bloc Planification) : la date de fin n'existe que si la case à cocher à GAUCHE du champ "Au" est COCHÉE (✓). Si la case est DÉCOCHÉE (vide), le champ date à droite est grisé/inactif, même s'il affiche une valeur — c'est un placeholder Dispatch, PAS une vraie date de fin. Règles :
+  • Case "Au" cochée ✓ → extraire la date du champ "Au" dans date_fin (format "DD/MM/YYYY")
+  • Case "Au" décochée □ → date_fin = null (récurrence sans fin)
+  Vérifie TOUJOURS l'état de la case avant d'extraire date_fin. Un champ grisé/désactivé = décoché.
+
+- ONGLET "Informations" : un onglet dédié (séparé de Général/Ordre/Attribution/Tarification) contient :
+  • "Saisi le" : date de saisie de l'ordre dans Dispatch (pour info, pas toujours utile)
+  • "Commentaires" avec 3 champs : "Infos Enl." (infos enlèvement), "Infos Liv." (infos livraison), "Info Fact." (info facturation)
+  TOUT contenu non vide de ces commentaires doit aller dans additional_info, préfixé par le nom du champ. Exemple : "Infos Enl.: sonner interphone 3B | Info Fact.: bon de commande BC-4521". Si tout est vide, ignore ce tab.
+
 - Pour les sous-prestations (sp1..sp4) : ordre d'apparition dans le tableau de l'onglet Tarification. Si moins de 4 sous-prestations, laisse les slots restants null.
 
 - CHAMP "additional_info" (POUBELLE DE LUXE — TRÈS UTILISÉ) : toute information potentiellement utile qui ne rentre dans AUCUN autre champ JSON dédié doit atterrir ici. Exemples à capturer systématiquement :
@@ -88,7 +98,7 @@ def _build_schema_prompt() -> str:
         "- conducteur_*, vehicule_*, remorque : onglet Attribution.\n"
         "- montant_total : onglet Tarification, 'Montant' ou 'Vente'.\n"
         "- days_of_month : UNIQUEMENT pour periodicite='Mensuelle', liste d'entiers 1-31 extraits du Gantt mensuel (null sinon).\n"
-        "- additional_info : info importante vue dans les screenshots qui ne rentre dans aucun autre champ (null si rien).\n"
+        "- additional_info : info importante vue dans les screenshots qui ne rentre dans aucun autre champ (null si rien). Inclut TOUT commentaire non vide de l'onglet Informations (Infos Enl. / Infos Liv. / Info Fact.) préfixé par le nom du champ.\n"
         "- claude_comment : auto-évaluation de l'extraction (ce qui a été clair, ce qui a été ambigu, incohérences détectées, champs illisibles, ce qui mérite vérification humaine). JAMAIS null si tu as extrait au moins une valeur — au minimum une phrase. Cf. système.\n"
     )
 

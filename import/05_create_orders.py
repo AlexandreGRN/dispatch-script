@@ -149,7 +149,10 @@ def build_comment(row: dict, resolution: dict) -> str:
     if replaced:
         lines.append("Remplacé par défaut :")
         lines.extend(replaced)
-    return "\n".join(lines)
+    text = "\n".join(lines)
+    if len(text) > 1990:
+        text = text[:1987] + "..."
+    return text
 
 
 def build_references(row: dict) -> list[dict]:
@@ -512,7 +515,15 @@ def main() -> int:
         help="Override date_debut for every order (ISO YYYY-MM-DD). "
              "Handy to make imported templates show up in the dashboard's default (today) window.",
     )
+    ap.add_argument(
+        "--codes",
+        default=None,
+        help="Comma-separated list of code_ordre to process (others skipped).",
+    )
     args = ap.parse_args()
+    code_filter: set[str] | None = (
+        {c.strip() for c in args.codes.split(",") if c.strip()} if args.codes else None
+    )
 
     override_date: str | None = None
     if args.override_date:
@@ -559,6 +570,8 @@ def main() -> int:
     processed = 0
     for i, row in enumerate(rows, 1):
         code = row["code_ordre"]
+        if code_filter is not None and code not in code_filter:
+            continue
         prior = created.get(code)
         if prior and prior.get("status") == "ok":
             continue

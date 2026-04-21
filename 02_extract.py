@@ -72,6 +72,11 @@ def log_error(msg: str) -> None:
 def capture_all_tabs(cfg: dict, order_dir: Path) -> tuple[dict[str, Path], list[str]]:
     """Click through every tab & sub-tab, take a screenshot for each view.
     Returns (shots dict, list of tab names with poor quality screenshots).
+
+    Navigation order chosen so Général is captured LAST — it contains the
+    Gantt calendar which takes the longest to render in Dispatch. By touching
+    all other tabs first, Général has extra time to repaint between selection
+    and screenshot.
     """
     order_dir.mkdir(parents=True, exist_ok=True)
     shots: dict[str, Path] = {}
@@ -84,26 +89,30 @@ def capture_all_tabs(cfg: dict, order_dir: Path) -> tuple[dict[str, Path], list[
             poor_quality.append(name)
             log(f"  ⚠ poor quality screenshot: {name} (flagged)")
 
-    # Général
-    nav.click_at(cfg["tabs"]["general"], pause=1.0)
-    snap("general", order_dir / "01_general.png", click_xy=cfg["tabs"]["general"])
-
     # Ordre → Enlèvement
     nav.click_at(cfg["tabs"]["ordre"], pause=1.0)
     nav.click_at(cfg["sub_tabs"]["enlevement"], pause=0.8)
-    snap("ordre_enl", order_dir / "02_ordre_enlevement.png", click_xy=cfg["sub_tabs"]["enlevement"])
+    snap("ordre_enl", order_dir / "01_ordre_enlevement.png", click_xy=cfg["sub_tabs"]["enlevement"])
 
     # Ordre → Contact Enlèvement
     nav.click_at(cfg["sub_tabs"]["enlevement_contact"], pause=0.8)
-    snap("ordre_enl_contact", order_dir / "03_ordre_enl_contact.png", click_xy=cfg["sub_tabs"]["enlevement_contact"])
+    snap("ordre_enl_contact", order_dir / "02_ordre_enl_contact.png", click_xy=cfg["sub_tabs"]["enlevement_contact"])
 
     # Ordre → Livraison
     nav.click_at(cfg["sub_tabs"]["livraison"], pause=0.8)
-    snap("ordre_liv", order_dir / "04_ordre_livraison.png", click_xy=cfg["sub_tabs"]["livraison"])
+    snap("ordre_liv", order_dir / "03_ordre_livraison.png", click_xy=cfg["sub_tabs"]["livraison"])
 
     # Ordre → Contact Livraison
     nav.click_at(cfg["sub_tabs"]["livraison_contact"], pause=0.8)
-    snap("ordre_liv_contact", order_dir / "05_ordre_liv_contact.png", click_xy=cfg["sub_tabs"]["livraison_contact"])
+    snap("ordre_liv_contact", order_dir / "04_ordre_liv_contact.png", click_xy=cfg["sub_tabs"]["livraison_contact"])
+
+    # Informations (commentaires + saisie) — skipped if not calibrated yet
+    info_xy = cfg.get("tabs", {}).get("informations")
+    if info_xy:
+        nav.click_at(info_xy, pause=1.0)
+        snap("informations", order_dir / "05_informations.png", click_xy=info_xy)
+    else:
+        log("  ⚠ tabs.informations not calibrated — skipping Informations tab")
 
     # Attribution
     nav.click_at(cfg["tabs"]["attribution"], pause=1.0)
@@ -112,6 +121,10 @@ def capture_all_tabs(cfg: dict, order_dir: Path) -> tuple[dict[str, Path], list[
     # Tarification
     nav.click_at(cfg["tabs"]["tarification"], pause=1.0)
     snap("tarification", order_dir / "07_tarification.png", click_xy=cfg["tabs"]["tarification"])
+
+    # Général — LAST, so it has the most time to render the Gantt
+    nav.click_at(cfg["tabs"]["general"], pause=1.5)
+    snap("general", order_dir / "08_general.png", click_xy=cfg["tabs"]["general"])
 
     return shots, poor_quality
 
