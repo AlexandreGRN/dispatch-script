@@ -23,7 +23,7 @@ CSV_COLUMNS: list[str] = [
     "conducteur_code", "conducteur_nom",
     "vehicule_code", "vehicule_libelle", "remorque",
     "montant_total",
-    "days_of_month", "additional_info",
+    "days_of_month", "additional_info", "claude_comment",
     "status", "champs_manquants", "screenshots_dir", "extracted_at",
 ]
 

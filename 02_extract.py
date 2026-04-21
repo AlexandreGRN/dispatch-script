@@ -250,24 +250,28 @@ def main() -> None:
             return
 
         count = 0
-        target_hits = 0
+        skipped = 0
         while True:
-            # ── FILTER: if --codes is set and this order isn't in the list, skip fast ─
-            if target_codes is not None:
-                current_code = (nav.extract_code_from_title(detail) or "UNKNOWN").upper()
-                if current_code not in target_codes:
-                    nav.close_detail(cfg.get("close_button"))
-                    nav.next_row()
-                    nav.fire_open_next()
-                    detail = nav.wait_detail_window(timeout=max(3.0, MIN_NAV_WAIT))
-                    if detail is None:
-                        log_error("Next detail window did not appear after skip; aborting.")
-                        break
-                    continue
+            # ── FILTER: if target_codes is set, skip non-matching orders fast ─────
+            code = nav.extract_code_from_title(detail) or "UNKNOWN"
+            if target_codes is not None and code not in target_codes:
+                skipped += 1
+                if skipped % 20 == 0:
+                    log(f"  … skipped {skipped} non-target orders so far (last: {code})")
+                nav.close_detail(cfg.get("close_button"))
+                nav.next_row()
+                nav.fire_open_next()
+                if code == args.stop_code:
+                    log(f"Reached stop code {code} while skipping. Stopping.")
+                    break
+                detail = nav.wait_detail_window(timeout=max(3.0, MIN_NAV_WAIT))
+                if detail is None:
+                    log_error("Next detail window did not appear after skip; aborting.")
+                    break
+                continue
 
             # ── CAPTURE: screenshots of the currently-open detail window ──────────
             try:
-                code = nav.extract_code_from_title(detail) or "UNKNOWN"
                 log(f"  order opened: {code}")
                 order_dir = SCREENSHOTS_DIR / code
                 shots, poor_quality = capture_all_tabs(cfg, order_dir)
@@ -312,10 +316,7 @@ def main() -> None:
             mark_processed(PROCESSED_CSV, code, status)
             processed[code] = status
             count += 1
-            if target_codes is not None and code.upper() in target_codes:
-                target_hits += 1
-            log(f"  #{count} done: {code} [{status}]"
-                + (f" (target {target_hits}/{len(target_codes)})" if target_codes else ""))
+            log(f"  #{count} done: {code} [{status}]")
 
             # ── STOP: check conditions ────────────────────────────────────────────
             if code == args.stop_code:
@@ -324,9 +325,6 @@ def main() -> None:
             if args.dry_run and count >= args.dry_run:
                 log(f"Reached dry-run limit ({args.dry_run}). Stopping.")
                 break
-            if target_codes is not None and target_hits >= len(target_codes):
-                log(f"All {len(target_codes)} target code(s) processed. Stopping.")
-                break
 
             # ── NEXT: the detail window was already fired; wait for it ────────────
             detail = nav.wait_detail_window(timeout=max(3.0, MIN_NAV_WAIT))
@@ -334,7 +332,7 @@ def main() -> None:
                 log_error("Next detail window did not appear; aborting.")
                 break
 
-    log(f"=== Finished. Total processed this run: {count} ===")
+    log(f"=== Finished. Total processed this run: {count} (skipped {skipped}) ===")
 
 
 if __name__ == "__main__":

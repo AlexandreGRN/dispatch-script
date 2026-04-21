@@ -7,3 +7,9 @@ output/screenshots/
 output/orders.csv
 output/processed.csv
 config.json
+config_prod.json
+import/config*.json
+!import/config.example.json
+output/import/
+output/import_prod/
+import/prod_snapshot/*.tsv

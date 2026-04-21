@@ -33,6 +33,14 @@ Ta mission : extraire STRICTEMENT les champs demandés depuis ce que tu VOIS dan
 
 - CHAMP "additional_info" : si tu vois dans les screenshots des informations potentiellement importantes qui ne rentrent dans aucun autre champ (commentaire spécifique, note manuscrite, champ libre rempli, particularité visuelle, numéro ou référence inhabituelle, mention d'un conditionnement spécial, etc.), résume-les brièvement en français dans ce champ (max 2-3 phrases). Si rien de notable, renvoie null. Ne duplique JAMAIS ici une donnée déjà présente dans un autre champ.
 
+- CHAMP "claude_comment" (TRÈS IMPORTANT — AUTO-ÉVALUATION) : utilise ce champ pour DIRE comment s'est passée l'extraction de ton point de vue. Liste :
+  • ce qui était clair et extrait avec certitude (concision),
+  • ce qui était ambigu / partiellement visible / nécessitait une devinette (DÉTAILLE, c'est crucial),
+  • les champs que tu as mis à null alors qu'ils existaient probablement mais illisibles,
+  • les incohérences détectées (ex: Gantt ≠ texte, date_fin vide pour une récurrence active, periodicite Mensuelle mais pas de days_of_month visibles, montants non cohérents, etc.),
+  • tout ce qui mérite une vérification humaine.
+  Écris en français, format libre, max 5 phrases courtes ou 5 bullet points. NE RENVOIE JAMAIS null pour ce champ si tu as extrait au moins une valeur — il doit contenir au minimum une phrase. Si tout est propre et sans doute : "Extraction nette, tous les champs visibles sont extraits avec certitude." Ce champ n'est JAMAIS dupliqué dans un autre.
+
 - Réponds UNIQUEMENT avec un JSON valide, sans markdown, sans commentaire, sans texte avant/après."""
 
 
@@ -60,6 +68,7 @@ def _build_schema_prompt() -> str:
         "- montant_total : onglet Tarification, 'Montant' ou 'Vente'.\n"
         "- days_of_month : UNIQUEMENT pour periodicite='Mensuelle', liste d'entiers 1-31 extraits du Gantt mensuel (null sinon).\n"
         "- additional_info : info importante vue dans les screenshots qui ne rentre dans aucun autre champ (null si rien).\n"
+        "- claude_comment : auto-évaluation de l'extraction (ce qui a été clair, ce qui a été ambigu, incohérences détectées, champs illisibles, ce qui mérite vérification humaine). JAMAIS null si tu as extrait au moins une valeur — au minimum une phrase. Cf. système.\n"
     )
 
 

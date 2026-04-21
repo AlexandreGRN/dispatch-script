@@ -1,0 +1,16 @@
+{
+  "db": {
+    "host": "127.0.0.1",
+    "port": 3306,
+    "user": "root",
+    "password": "root",
+    "database": "obspher"
+  },
+  "api": {
+    "base_url": "http://10.200.1.27:8090",
+    "token": "PASTE_JWT_HERE"
+  },
+  "fallback_user_uuid": "db85f589-cb20-4650-ae81-e2f45a3eb245",
+  "fuzzy_threshold": 0.85,
+  "prefer_id_dispatch_match": false
+}

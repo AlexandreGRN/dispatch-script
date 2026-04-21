@@ -147,3 +147,5 @@ def next_row(pause: float = 0.3) -> None:
     """Move list selection to the next order (auto-scrolls in the Dispatch list)."""
     pyautogui.press("down")
     time.sleep(pause)
+
+
