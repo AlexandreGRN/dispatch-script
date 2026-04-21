@@ -12,6 +12,14 @@ from pywinauto import Desktop
 pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.05
 
+# Sweep density: tune these if Dispatch still misses repaints between rows.
+# Total points = SWEEP_ROWS * SWEEP_COLS. Each move takes ~SWEEP_MOVE_S seconds.
+# Current: 20 rows × 10 cols = 200 points × 0.02s ≈ 4s per sweep.
+SWEEP_ROWS = 20
+SWEEP_COLS = 10
+SWEEP_MOVE_S = 0.02
+SWEEP_TAIL_PAUSE_S = 0.5
+
 DETAIL_TITLE_SUBSTR = "Ordre régulier"
 LIST_TITLE_SUBSTR = "Dispatch INNOVIA"
 
@@ -113,24 +121,29 @@ def _screenshot_quality(path: Path) -> float:
 
 
 def _sweep_content_area() -> None:
-    """Drag the cursor across the entire detail window to force Dispatch to
-    repaint every control before the screenshot. Works around RDP rendering
-    lag where widgets stay blank until hovered.
+    """Drag the cursor across the entire screen to force Dispatch to repaint
+    every control before the screenshot. Works around RDP rendering lag where
+    widgets stay blank until hovered.
 
-    Boustrophédon sweep covering the full Dispatch detail window (roughly
-    1456x800 on a 1440p display). Grid of 6 rows x 5 columns = 30 points.
-    Each row alternates direction so the cursor sweeps continuously without
-    flying back across the screen, maximizing hover events per pixel.
+    Boustrophédon sweep covering the FULL screen (any resolution, detected via
+    pyautogui.size()). Very dense grid — SWEEP_ROWS × SWEEP_COLS points — so
+    every widget gets a hover event in both X and Y axes. Each row alternates
+    direction so the cursor sweeps continuously.
 
-    Runs in ~1.2s total — tradeoff for reliable rendering under RDP.
+    Tune SWEEP_ROWS / SWEEP_COLS / SWEEP_MOVE_S at top of this file if still
+    not dense enough. Called before every tab screenshot, so the full UI gets
+    hovered on every tab.
     """
-    xs = [100, 450, 800, 1150, 1400]
-    ys = [80, 200, 320, 450, 600, 750]
+    screen_w, screen_h = pyautogui.size()
+    margin_x = max(20, screen_w // 40)
+    margin_y = max(20, screen_h // 40)
+    xs = [margin_x + i * (screen_w - 2 * margin_x) // (SWEEP_COLS - 1) for i in range(SWEEP_COLS)]
+    ys = [margin_y + i * (screen_h - 2 * margin_y) // (SWEEP_ROWS - 1) for i in range(SWEEP_ROWS)]
     for i, y in enumerate(ys):
         row = xs if i % 2 == 0 else list(reversed(xs))
         for x in row:
-            pyautogui.moveTo(x, y, duration=0.04)
-    time.sleep(0.5)
+            pyautogui.moveTo(x, y, duration=SWEEP_MOVE_S)
+    time.sleep(SWEEP_TAIL_PAUSE_S)
 
 
 def screenshot_with_retry(
